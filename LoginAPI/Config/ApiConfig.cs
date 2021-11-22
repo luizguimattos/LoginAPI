@@ -1,6 +1,9 @@
-﻿using LoginAPI.Application;
-using LoginAPI.Application.Interfaces;
-using LoginAPI.Data;
+﻿using LoginAPI.Application.Services;
+using LoginAPI.Data.Contexts;
+using LoginAPI.Data.Repository;
+using LoginAPI.Domain.Clientes;
+using LoginAPI.EF.Config;
+using LoginAPI.EF.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LoginAPI.Config
@@ -11,10 +14,12 @@ namespace LoginAPI.Config
         {
             services.AddControllers();
 
-            services.AddDbContext<ClienteContext>(options =>
+            services.AddDbContext<ApplicationContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
-            services.AddScoped<IClienteService, ClienteService>();
+            services.AddScoped<IClienteAppService, ClienteService>();
+
+            services.AddScoped<IClienteRepository, ClienteRepository>();
 
             return services;
         }

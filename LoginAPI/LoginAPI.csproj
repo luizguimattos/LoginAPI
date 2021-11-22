@@ -20,8 +20,19 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="6.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.14.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoginAPI.Application\LoginAPI.Application.csproj" />
+    <ProjectReference Include="..\LoginAPI.Data\LoginAPI.Data.csproj" />
+    <ProjectReference Include="..\LoginAPI.Domain\LoginAPI.Domain.csproj" />
+    <ProjectReference Include="..\LoginAPI.EF\LoginAPI.EF.csproj" />
   </ItemGroup>
 
 </Project>

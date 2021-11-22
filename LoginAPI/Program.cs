@@ -1,4 +1,5 @@
 using LoginAPI.Config;
+using LoginAPI.EF.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 

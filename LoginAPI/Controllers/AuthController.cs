@@ -1,5 +1,8 @@
-﻿using LoginAPI.Application.Interfaces;
-using LoginAPI.Extensions;
+﻿using LoginAPI.Domain.Clientes;
+using LoginAPI.Domain.ValueObjects;
+using LoginAPI.EF.Data;
+using LoginAPI.EF.Models;
+using LoginAPI.EF.Services;
 using LoginAPI.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,17 +19,27 @@ namespace LoginAPI.Controllers
     {
         private readonly SignInManager<IdentityUser> _signInManager;
         private readonly UserManager<IdentityUser> _userManager;
-        private readonly IClienteService clienteService;
         private readonly AppSettings _appSettings;
+        private readonly ApplicationDbContext _context;
+        private readonly AppTokenSettings _appTokenSettings;
+        private readonly IClienteAppService _clienteAppService;
+        private readonly AuthenticationService _authenticationService;
 
         public AuthController(SignInManager<IdentityUser> signInManager,
                               UserManager<IdentityUser> userManager,
-                              IOptions<AppSettings> appSettings, IClienteService clienteService)
+                              IOptions<AppSettings> appSettings,
+                              ApplicationDbContext context,
+                                IOptions<AppTokenSettings> appTokenSettings,
+                                IClienteAppService clienteAppService,
+                              AuthenticationService authenticationService)
         {
             _signInManager = signInManager;
             _userManager = userManager;
             _appSettings = appSettings.Value;
-            this.clienteService = clienteService;
+            _appTokenSettings = appTokenSettings.Value;
+            _context = context;
+            _clienteAppService = clienteAppService;
+            _authenticationService = authenticationService;
         }
 
         [HttpPost("registrar")]
@@ -47,14 +60,14 @@ namespace LoginAPI.Controllers
             {
                 var userCreated = await _userManager.FindByEmailAsync(usuarioRegistro.Email);
 
-                clienteService.CriarCriente(new Models.Entities.Cliente()
+                _clienteAppService.RegistrarCliente(new Cliente()
                 {
                     UserID = userCreated.Id,
                     Nome = usuarioRegistro.Nome,
                     Cidade = usuarioRegistro.Cidade
                 });
 
-                return CustomResponse(await GerarJwt(usuarioRegistro.Email));
+                return CustomResponse(await _authenticationService.GerarJwt(usuarioRegistro.Email));
             }
 
             foreach (var error in result.Errors)
@@ -75,7 +88,7 @@ namespace LoginAPI.Controllers
 
             if (result.Succeeded)
             {
-                return CustomResponse(await GerarJwt(usuarioLogin.Email));
+                return CustomResponse(await _authenticationService.GerarJwt(usuarioLogin.Email));
             }
 
             if (result.IsLockedOut)
@@ -88,69 +101,24 @@ namespace LoginAPI.Controllers
             return CustomResponse();
         }
 
-        private async Task<UsuarioRespostaLogin> GerarJwt(string email)
+        [HttpPost("refresh")]
+        public async Task<ActionResult> RefreshToken([FromBody] string refreshToken)
         {
-            var user = await _userManager.FindByEmailAsync(email);
-            var claims = await _userManager.GetClaimsAsync(user);
-
-            var identityClaims = await ObterClaimsUsuario(claims, user);
-            var encodedToken = CodificarToken(identityClaims);
-
-            return ObterRespostaToken(encodedToken, user, claims);
-        }
-
-        private UsuarioRespostaLogin ObterRespostaToken(string encodedToken, IdentityUser user, IEnumerable<Claim> claims)
-        {
-            return new UsuarioRespostaLogin
+            if (string.IsNullOrEmpty(refreshToken))
             {
-                AccessToken = encodedToken,
-                ExpiresIn = TimeSpan.FromHours(_appSettings.ExpiracaoHoras).TotalSeconds,
-                UsuarioToken = new UsuarioToken
-                {
-                    Id = user.Id,
-                    Email = user.Email,
-                    Claims = claims.Select(c => new UsuarioClaim { Type = c.Type, Value = c.Value })
-                }
-            };
-        }
-
-        private async Task<ClaimsIdentity> ObterClaimsUsuario(ICollection<Claim> claims, IdentityUser user)
-        {
-            var userRoles = await _userManager.GetRolesAsync(user);
-
-            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, user.Id));
-            claims.Add(new Claim(JwtRegisteredClaimNames.Email, user.Email));
-            claims.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
-            claims.Add(new Claim(JwtRegisteredClaimNames.Nbf, ToUnixEpochDate(DateTime.UtcNow).ToString()));
-            claims.Add(new Claim(JwtRegisteredClaimNames.Iat, ToUnixEpochDate(DateTime.UtcNow).ToString(), ClaimValueTypes.Integer64));
-            foreach (var userRole in userRoles)
-            {
-                claims.Add(new Claim("role", userRole));
+                AdicionarErroProcessamento("Refresh Token inválido");
+                return CustomResponse();
             }
 
-            var identityClaims = new ClaimsIdentity();
-            identityClaims.AddClaims(claims);
+            var token = await _authenticationService.ObterRefreshToken(Guid.Parse(refreshToken));
 
-            return identityClaims;
-        }
-
-        private string CodificarToken(ClaimsIdentity identityClaims)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
-            var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
+            if (token is null)
             {
-                Issuer = _appSettings.Emissor,
-                Audience = _appSettings.ValidoEm,
-                Subject = identityClaims,
-                Expires = DateTime.UtcNow.AddHours(_appSettings.ExpiracaoHoras),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            });
+                AdicionarErroProcessamento("Refresh Token expirado");
+                return CustomResponse();
+            }
 
-            return tokenHandler.WriteToken(token);
+            return CustomResponse(await _authenticationService.GerarJwt(token.Username));
         }
-
-        private static long ToUnixEpochDate(DateTime date)
-            => (long)Math.Round((date.ToUniversalTime() - new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero)).TotalSeconds);
     }
 }
