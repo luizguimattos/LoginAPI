@@ -31,4 +31,9 @@ namespace LoginAPI.Models
         [StringLength(100, ErrorMessage = "O campo {0} precisa ter entre {2} e {1} caracteres", MinimumLength = 6)]
         public string Senha { get; set; }
     }
+
+    public class CheckViewModel
+    {
+        public string Message { get; set; }
+    }
 }
